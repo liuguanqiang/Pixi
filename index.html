@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIXI</title>
+</head>
+<script src="./script/pixi.5.2.4.js"></script>
+<script src="https://www.kkkk1000.com/js/bump.js"></script>
+
+<body>
+    <canvas id="gameCanvas" />
+</body>
+<script type="text/javascript">
+    window.config = {
+        width: 600,
+        height: 600
+    }
+    const Sprite = PIXI.Sprite;
+    const resources = PIXI.loader.resources;
+    const Text = PIXI.Text;
+    const TextStyle = PIXI.TextStyle;
+    const TextureCache = PIXI.utils.TextureCache;
+
+    //碰撞检测
+    let bump = new Bump(PIXI);
+    //子弹集合
+    const bullets = [];
+    //最大帧数
+    const frameSum = 3000;
+    //当前场上的子弹数量
+    let mission_Number = 0;
+    //当前帧数
+    let frameIndex = 0;
+    //当前碰撞数
+    let gradeNum = 0;
+
+    //子弹速率 5/帧
+    const bullet_speed = 5;
+
+    function random(min, max) {
+        return Math.floor(Math.random() * (max - min) + min);
+    }
+
+    window.onload = () => {
+        onInit();
+    }
+
+    function onInit() {
+        window.app = new PIXI.Application({
+            view: document.getElementById('gameCanvas'),
+            width: config.width,
+            height: config.height,
+            antialias: true,
+            transparent: false,
+            resolution: 1,
+        })
+        app.renderer.backgroundColor = 0x061639;
+        const images = ["image/bg.png", "image/boss.png", "image/plane.png", "image/coin.png", "image/bullet.png", "image/stone.png"];
+        PIXI.loader.add(images).on("progress", (loader, resource) => {
+            // console.log("loading: " + resource.url);
+            // console.log("progress: " + loader.progress + "%");
+        }).load(() => {
+            onInitSprite();
+            play();
+        });
+    }
+
+    function onInitSprite() {
+        // let bgSprite = new Sprite(
+        //     TextureCache["image/bg.png"]
+        // );
+        // app.stage.addChild(bgSprite);
+        // bgSprite.width = config.width;
+        // bgSprite.height = config.height;
+
+        window.plane = new Sprite(
+            TextureCache["image/plane.png"]
+        );
+        plane.width = 30;
+        plane.height = 60;
+        plane.anchor.x = 0.5;
+        plane.anchor.y = 0.5;
+        plane.x = 100;
+        plane.y = 500;
+        app.stage.addChild(plane);
+
+        let boss = new Sprite(
+            TextureCache["image/boss.png"]
+        );
+        boss.anchor.x = 0.5;
+        boss.anchor.y = 0.5;
+        boss.width = 50;
+        boss.height = 80;
+        boss.x = 300;
+        boss.y = 100;
+        app.stage.addChild(boss);
+
+        window.curFrameText = new Text("帧数：0");
+        curFrameText.style = { fill: "white", font: "10px" };
+        app.stage.addChild(curFrameText);
+        curFrameText.position.set(420, 20);
+
+        window.gradeText = new Text("碰撞：0");
+        gradeText.style = { fill: "yellow", font: "10px" };
+        app.stage.addChild(gradeText);
+        gradeText.position.set(420, 60);
+    }
+
+    //开始游戏
+    function play() {
+        const cc = 6;
+        var kCount = cc + 1;
+        app.ticker.add(de => {
+            if (frameSum <= frameIndex) {
+                return;
+            }
+            kCount--;
+            if (kCount == 0) {
+                kCount = cc;
+            }
+            if (kCount == cc) {
+                updateBullet();
+                const randPos = getPlanePos(frameIndex);
+                move(frameIndex, randPos.x, randPos.y);
+                hit();
+                const bulletList = createBullets(frameIndex);
+                bulletList.forEach(item => {
+                    emission(frameIndex, item.dx, item.dy);
+                });
+                frameIndex++;
+                curFrameText.text = "帧数：" + frameIndex;
+            }
+        })
+    }
+
+    //Plane 可以访问 第r回合  移动飞机到 x y
+    function move(r, x, y) {
+        if (plane) {
+            plane.x = x;
+            plane.y = y;
+        }
+    }
+
+    //Boss 可以访问 在第r回合发射一枚子弹，方向为(dx,dy), 速度固定为5px / 帧
+    function emission(r, dx, dy) {
+        mission_Number++;
+        let bullet = new Sprite(
+            TextureCache["image/coin.png"]
+        );
+        bullet.r = r;
+        bullet.anchor.x = 0.5;
+        bullet.anchor.y = 0.5;
+        bullet.width = 10;
+        bullet.height = 10;
+        bullet.x = 300;
+        bullet.y = 100;
+        const l = Math.sqrt(Math.pow(dx - bullet.x, 2) + Math.pow(dy - bullet.y, 2));
+        const off_s = l / bullet_speed;
+        bullet.vx = (bullet.x - dx) / off_s;
+        bullet.vy = (bullet.y - dy) / off_s;
+        app.stage.addChild(bullet);
+        bullets.push(bullet);
+    }
+
+    //碰撞检测 
+    function hit() {
+        bump.hit(plane, bullets, true, true, true, (collision, platform) => {
+            if (platform) {
+                gradeNum++;
+                const index = bullets.findIndex(a => a === platform);
+                removeBullet(platform, index);
+                gradeText.text = "碰撞：" + gradeNum;
+            }
+        });
+    }
+
+    //第r帧 飞机移动位置
+    function getPlanePos(r) {
+        let x = random(plane.x - 30, plane.x + 30);
+        let y = random(plane.y - 30, plane.y + 30);
+        if (x < plane.width / 2) {
+            x = plane.width / 2;
+        } else if (x > window.config.width - plane.width / 2) {
+            x = window.config.width - plane.width / 2;
+        }
+
+        if (y < plane.height / 2) {
+            y = plane.height / 2;
+        } else if (y > window.config.height - plane.height / 2) {
+            y = window.config.height - plane.height / 2;
+        } else if (y < (window.config.height - plane.height) / 2) {
+            y = (window.config.height - plane.height) / 2;
+        }
+        return { "x": x, "y": y }
+    }
+
+     //第r帧 boss创建子弹
+    function createBullets(r) {
+        const list = [];
+        const n = 60 + r / 30 - mission_Number;
+        for (let i = 0; i < n; i++) {
+            list.push({ "dx": random(plane.x - 50, plane.x + 50), "dy": random(plane.y - 50, plane.y + 50) })
+        }
+        return list;
+    }
+
+
+    //刷新子弹
+    function updateBullet() {
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            bullet.x -= bullet.vx;
+            bullet.y -= bullet.vy;
+            if (bullet.x < 0 || bullet.x > window.config.width || bullet.y < 0 || bullet.y > window.config.height) {
+                removeBullet(bullet, i);
+            }
+        }
+    }
+
+    //删除子弹
+    function removeBullet(bullet, i) {
+        if (bullet && i >= 0) {
+            mission_Number--;
+            app.stage.removeChild(bullet);
+            bullets.splice(i, 1);
+        }
+    }
+</script>
+
+</html>
