@@ -5,17 +5,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PIXI</title>
+    <script src="./script/pixi.5.2.4.js"></script>
+    <script src="https://www.kkkk1000.com/js/bump.js"></script>
+    <script src="./script/audioPlay.js"></script>
 </head>
-<script src="./script/pixi.5.2.4.js"></script>
-<script src="https://www.kkkk1000.com/js/bump.js"></script>
+
 
 <body>
     <canvas id="gameCanvas" />
 </body>
 <script type="text/javascript">
     window.config = {
-        width: 600,
-        height: 600
+        width: 890,
+        height: 480,
+        canvasWidth: 641
     }
     const Sprite = PIXI.Sprite;
     const resources = PIXI.loader.resources;
@@ -39,6 +42,22 @@
     //子弹速率 5/帧
     const bullet_speed = 5;
 
+    //boss子弹layout
+    let bossBullet_animals = new PIXI.Container();
+
+    //飞机子弹layout
+    let planeBullet_animals = new PIXI.Container();
+
+    //飞机
+    let plane;
+
+    //螺旋桨
+    let propeller;
+
+    //飞机子弹击中boss效果动画
+    let bulletBombAnimation;
+
+
     function random(min, max) {
         return Math.floor(Math.random() * (max - min) + min);
     }
@@ -57,7 +76,11 @@
             resolution: 1,
         })
         app.renderer.backgroundColor = 0x061639;
-        const images = ["image/bg.png", "image/boss.png", "image/plane.png", "image/coin.png", "image/bullet.png", "image/stone.png"];
+        const images = ["image/背景/背景1.png", "image/背景/记分板.png", "image/飞机/飞机.png", "image/飞机/无敌1.png", "image/boss/boss1.png", "image/boss/boss2.png"
+            , "image/bullet/子弹.png", "image/22.png"];
+        for (let i = 1; i <= 4; i++) {
+            images.push(`image/bullet/${i}.png`)
+        }
         PIXI.loader.add(images).on("progress", (loader, resource) => {
             // console.log("loading: " + resource.url);
             // console.log("progress: " + loader.progress + "%");
@@ -65,74 +88,167 @@
             onInitSprite();
             play();
         });
+
+        onInitAudio();
     }
 
-    function onInitSprite() {
-        // let bgSprite = new Sprite(
-        //     TextureCache["image/bg.png"]
-        // );
-        // app.stage.addChild(bgSprite);
-        // bgSprite.width = config.width;
-        // bgSprite.height = config.height;
 
-        window.plane = new Sprite(
-            TextureCache["image/plane.png"]
+    function onInitSprite() {
+        let bgSprite = new Sprite(
+            TextureCache["image/背景/背景1.png"]
         );
-        plane.width = 30;
-        plane.height = 60;
-        plane.anchor.x = 0.5;
-        plane.anchor.y = 0.5;
-        plane.x = 100;
-        plane.y = 500;
-        app.stage.addChild(plane);
+        bgSprite.width = window.config.canvasWidth;
+        bgSprite.height = window.config.height;
+        app.stage.addChild(bgSprite);
 
         let boss = new Sprite(
-            TextureCache["image/boss.png"]
+            TextureCache["image/boss/boss1.png"]
         );
         boss.anchor.x = 0.5;
-        boss.anchor.y = 0.5;
-        boss.width = 50;
-        boss.height = 80;
-        boss.x = 300;
-        boss.y = 100;
+        boss.anchor.y = 0;
+        boss.width = 321 * 0.35;
+        boss.height = 256 * 0.35;
+        boss.x = window.config.canvasWidth / 2;
+        boss.y = 10;
         app.stage.addChild(boss);
 
-        window.curFrameText = new Text("帧数：0");
-        curFrameText.style = { fill: "white", font: "10px" };
-        app.stage.addChild(curFrameText);
-        curFrameText.position.set(420, 20);
+        propeller = new Sprite(
+            TextureCache["image/boss/boss2.png"]
+        );
+        propeller.anchor.x = 0.5;
+        propeller.anchor.y = 0.5;
+        propeller.width = 178 * 0.35;
+        propeller.height = 178 * 0.35;
+        propeller.x = window.config.canvasWidth / 2;
+        propeller.y = 38;
+        app.stage.addChild(propeller);
 
-        window.gradeText = new Text("碰撞：0");
-        gradeText.style = { fill: "yellow", font: "10px" };
-        app.stage.addChild(gradeText);
-        gradeText.position.set(420, 60);
+        plane = new Sprite(
+            TextureCache["image/飞机/飞机.png"]
+        );
+        plane.width = 251 * 0.3;
+        plane.height = 167 * 0.3;
+        plane.anchor.x = 0.5;
+        plane.anchor.y = 0.5;
+        plane.x = window.config.canvasWidth / 2;
+        plane.y = 450;
+        app.stage.addChild(plane);
+
+
+        app.stage.addChild(bossBullet_animals);
+        app.stage.addChild(planeBullet_animals);
+
+        const scorecard = new Sprite(
+            TextureCache["image/背景/记分板.png"]
+        );
+        scorecard.width = 250;
+        scorecard.height = window.config.height;
+        scorecard.x = window.config.canvasWidth;
+        app.stage.addChild(scorecard);
+
+
+        var texture = PIXI.Texture.fromImage("image/22.png");
+        var cutnum = 8;
+        //将图片拆分为8帧
+        var width = parseInt(texture.width / cutnum);
+        var height = parseInt(texture.height);
+        var frameArray = [];
+        for (var i = 0; i < cutnum; i++) {
+            var rectangle = new PIXI.Rectangle(i * width, 0, width, height);
+            var frame = new PIXI.Texture(texture, rectangle);
+            frameArray.push(frame);
+        }
+        //播放动画
+        movieClip = new PIXI.extras.AnimatedSprite(frameArray);
+        movieClip.position.x = 10;
+        movieClip.position.y = 100;
+        movieClip.animationSpeed = parseFloat((20 / 120).toFixed(2));
+        movieClip.loop = true;
+        movieClip.play();
+        app.stage.addChild(movieClip);
+
+
+
+        // const frameArray = [];
+        // for (let i = 1; i <= 4; i++) {
+        //     const frame = new Sprite(
+        //         TextureCache[`image/击中/${i}.png`]
+        //     );
+        //     frameArray.push(frame);
+        // }
+        // bulletBombAnimation = new PIXI.extras.AnimatedSprite(frameArray);
+        // bulletBombAnimation.position.x = 100;
+        // bulletBombAnimation.position.y = 100;
+        // bulletBombAnimation.animationSpeed = 0.2;
+        // bulletBombAnimation.play();
+        // app.stage.addChild(bulletBombAnimation);
+
+
+        // window.curFrameText = new Text("帧数：0");
+        // curFrameText.style = { fill: "white", font: "10px" };
+        // app.stage.addChild(curFrameText);
+        // curFrameText.position.set(420, 20);
+
+        // window.gradeText = new Text("碰撞：0");
+        // gradeText.style = { fill: "yellow", font: "10px" };
+        // app.stage.addChild(gradeText);
+        // gradeText.position.set(420, 60);
+    }
+
+    function onInitAudio() {
+        let bgAudio = createAudio("music/bg.mp3");
+        bgAudio.loop = true;
+        bgAudio.play();
     }
 
     //开始游戏
     function play() {
-        const cc = 6;
-        var kCount = cc + 1;
+        const cc1 = 6;
+        const cc2 = 60;
         app.ticker.add(de => {
-            if (frameSum <= frameIndex) {
-                return;
-            }
-            kCount--;
-            if (kCount == 0) {
-                kCount = cc;
-            }
-            if (kCount == cc) {
+            frameIndex++;
+            rotationPropeller();
+            if (frameIndex % cc1 == 0) {
                 updateBullet();
                 const randPos = getPlanePos(frameIndex);
                 move(frameIndex, randPos.x, randPos.y);
-                hit();
+                // hit();
                 const bulletList = createBullets(frameIndex);
                 bulletList.forEach(item => {
                     emission(frameIndex, item.dx, item.dy);
                 });
-                frameIndex++;
-                curFrameText.text = "帧数：" + frameIndex;
+            }
+            if (frameIndex % cc2 == 0) {
+                planeSendBullet();
             }
         })
+    }
+
+    //飞机发射子弹
+    function planeSendBullet() {
+        let bullet = new Sprite(
+            TextureCache[`image/bullet/子弹.png`]
+        );
+        bullet.anchor.x = 0.5;
+        bullet.width = 28 * 0.6;
+        bullet.height = 58 * 0.6;
+        bullet.x = plane.x;
+        bullet.y = plane.y - 40;
+        const dx = window.config.canvasWidth / 2;
+        const dy = 80;
+        const l = Math.sqrt(Math.pow(dx - bullet.x, 2) + Math.pow(dy - bullet.y, 2));
+        const off_s = l / 20;
+        bullet.vx = (bullet.x - dx) / off_s;
+        bullet.vy = (bullet.y - dy) / off_s;
+        planeBullet_animals.addChild(bullet);
+    }
+
+    //螺旋桨旋转
+    function rotationPropeller() {
+        if (propeller.rotation >= 360) {
+            propeller.rotation = 0;
+        }
+        propeller.rotation += 0.2;
     }
 
     //Plane 可以访问 第r回合  移动飞机到 x y
@@ -146,21 +262,22 @@
     //Boss 可以访问 在第r回合发射一枚子弹，方向为(dx,dy), 速度固定为5px / 帧
     function emission(r, dx, dy) {
         mission_Number++;
+        let id = random(1, 5);
         let bullet = new Sprite(
-            TextureCache["image/coin.png"]
+            TextureCache[`image/bullet/${id}.png`]
         );
         bullet.r = r;
         bullet.anchor.x = 0.5;
         bullet.anchor.y = 0.5;
-        bullet.width = 10;
-        bullet.height = 10;
-        bullet.x = 300;
+        bullet.width = 15;
+        bullet.height = 15;
+        bullet.x = window.config.canvasWidth / 2;
         bullet.y = 100;
         const l = Math.sqrt(Math.pow(dx - bullet.x, 2) + Math.pow(dy - bullet.y, 2));
         const off_s = l / bullet_speed;
         bullet.vx = (bullet.x - dx) / off_s;
         bullet.vy = (bullet.y - dy) / off_s;
-        app.stage.addChild(bullet);
+        bossBullet_animals.addChild(bullet);
         bullets.push(bullet);
     }
 
@@ -170,7 +287,7 @@
             if (platform) {
                 gradeNum++;
                 const index = bullets.findIndex(a => a === platform);
-                removeBullet(platform, index);
+                removeBossBullet(platform, index);
                 gradeText.text = "碰撞：" + gradeNum;
             }
         });
@@ -182,8 +299,8 @@
         let y = random(plane.y - 30, plane.y + 30);
         if (x < plane.width / 2) {
             x = plane.width / 2;
-        } else if (x > window.config.width - plane.width / 2) {
-            x = window.config.width - plane.width / 2;
+        } else if (x > window.config.canvasWidth - plane.width / 2) {
+            x = window.config.canvasWidth - plane.width / 2;
         }
 
         if (y < plane.height / 2) {
@@ -196,10 +313,10 @@
         return { "x": x, "y": y }
     }
 
-     //第r帧 boss创建子弹
+    //第r帧 boss创建子弹
     function createBullets(r) {
         const list = [];
-        const n = 60 + r / 30 - mission_Number;
+        const n = 1;
         for (let i = 0; i < n; i++) {
             list.push({ "dx": random(plane.x - 50, plane.x + 50), "dy": random(plane.y - 50, plane.y + 50) })
         }
@@ -213,18 +330,29 @@
             const bullet = bullets[i];
             bullet.x -= bullet.vx;
             bullet.y -= bullet.vy;
-            if (bullet.x < 0 || bullet.x > window.config.width || bullet.y < 0 || bullet.y > window.config.height) {
-                removeBullet(bullet, i);
+            if (bullet.x < 0 || bullet.x > window.config.canvasWidth || bullet.y < 0 || bullet.y > window.config.height) {
+                removeBossBullet(bullet, i);
             }
+        }
+        for (let i = planeBullet_animals.children.length - 1; i >= 0; i--) {
+            const bullet = planeBullet_animals.children[i];
+            bullet.x -= bullet.vx;
+            bullet.y -= bullet.vy;
         }
     }
 
-    //删除子弹
-    function removeBullet(bullet, i) {
+    //删除boss子弹
+    function removeBossBullet(bullet, i) {
         if (bullet && i >= 0) {
             mission_Number--;
-            app.stage.removeChild(bullet);
+            bossBullet_animals.removeChild(bullet);
             bullets.splice(i, 1);
+        }
+    }
+    //删除飞机子弹
+    function removePlaneBullet(bullet) {
+        if (bullet) {
+            planeBullet_animals.removeChild(bullet);
         }
     }
 </script>
