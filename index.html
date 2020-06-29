@@ -51,12 +51,17 @@
     //飞机
     let plane;
 
+    //boss
+    let boss;
+
     //螺旋桨
     let propeller;
 
     //飞机子弹击中boss效果动画
     let bulletBombAnimation;
 
+    //清屏效果动画
+    let cleraCanvasAnimation;
 
     function random(min, max) {
         return Math.floor(Math.random() * (max - min) + min);
@@ -76,8 +81,8 @@
             resolution: 1,
         })
         app.renderer.backgroundColor = 0x061639;
-        const images = ["image/背景/背景1.png", "image/背景/记分板.png", "image/飞机/飞机.png", "image/飞机/无敌1.png", "image/boss/boss1.png", "image/boss/boss2.png"
-            , "image/bullet/子弹.png", "image/22.png"];
+        const images = ["image/背景/背景1.png", "image/背景/记分板.png", "image/飞机/飞机.png", "image/boss/boss1.png", "image/boss/boss2.png"
+            , "image/bullet/子弹.png", "image/序列/爆炸.png", "image/序列/击中.png", "image/序列/清场.png"];
         for (let i = 1; i <= 4; i++) {
             images.push(`image/bullet/${i}.png`)
         }
@@ -101,7 +106,7 @@
         bgSprite.height = window.config.height;
         app.stage.addChild(bgSprite);
 
-        let boss = new Sprite(
+        boss = new Sprite(
             TextureCache["image/boss/boss1.png"]
         );
         boss.anchor.x = 0.5;
@@ -146,43 +151,7 @@
         scorecard.x = window.config.canvasWidth;
         app.stage.addChild(scorecard);
 
-
-        var texture = PIXI.Texture.fromImage("image/22.png");
-        var cutnum = 8;
-        //将图片拆分为8帧
-        var width = parseInt(texture.width / cutnum);
-        var height = parseInt(texture.height);
-        var frameArray = [];
-        for (var i = 0; i < cutnum; i++) {
-            var rectangle = new PIXI.Rectangle(i * width, 0, width, height);
-            var frame = new PIXI.Texture(texture, rectangle);
-            frameArray.push(frame);
-        }
-        //播放动画
-        movieClip = new PIXI.extras.AnimatedSprite(frameArray);
-        movieClip.position.x = 10;
-        movieClip.position.y = 100;
-        movieClip.animationSpeed = parseFloat((20 / 120).toFixed(2));
-        movieClip.loop = true;
-        movieClip.play();
-        app.stage.addChild(movieClip);
-
-
-
-        // const frameArray = [];
-        // for (let i = 1; i <= 4; i++) {
-        //     const frame = new Sprite(
-        //         TextureCache[`image/击中/${i}.png`]
-        //     );
-        //     frameArray.push(frame);
-        // }
-        // bulletBombAnimation = new PIXI.extras.AnimatedSprite(frameArray);
-        // bulletBombAnimation.position.x = 100;
-        // bulletBombAnimation.position.y = 100;
-        // bulletBombAnimation.animationSpeed = 0.2;
-        // bulletBombAnimation.play();
-        // app.stage.addChild(bulletBombAnimation);
-
+        this.onInitAnimation();
 
         // window.curFrameText = new Text("帧数：0");
         // curFrameText.style = { fill: "white", font: "10px" };
@@ -193,6 +162,63 @@
         // gradeText.style = { fill: "yellow", font: "10px" };
         // app.stage.addChild(gradeText);
         // gradeText.position.set(420, 60);
+    }
+
+    function onInitAnimation() {
+        let texture = PIXI.Texture.fromImage("image/序列/击中.png");
+        let cutnum = 4;
+        //将图片拆分为4帧
+        let width = parseInt(texture.width / cutnum);
+        let height = parseInt(texture.height);
+        let frameArray = [];
+        for (let i = 0; i < cutnum; i++) {
+            let rectangle = new PIXI.Rectangle(i * width, 0, width, height);
+            let frame = new PIXI.Texture(texture, rectangle);
+            frameArray.push(frame);
+        }
+
+        //飞机子弹击中boss动画
+        bulletBombAnimation = new PIXI.extras.AnimatedSprite(frameArray);
+        bulletBombAnimation.anchor.x = 0.5;
+        bulletBombAnimation.position.x = 320;
+        bulletBombAnimation.position.y = 20;
+        bulletBombAnimation.animationSpeed = 0.15;
+        bulletBombAnimation.loop = false;
+        bulletBombAnimation.onComplete = () => {
+            bulletBombAnimation.visible = false;
+            // bulletBombAnimation.stop();
+        }
+        bulletBombAnimation.visible = false;
+        app.stage.addChild(bulletBombAnimation);
+        //this.onCreateAnimatedSprite()
+
+    }
+
+    function onCreateAnimatedSprite(imagePath, cutnum, sprite, x, y) {
+        let texture = PIXI.Texture.fromImage(imagePath);
+        //将图片拆分为4帧
+        let width = parseInt(texture.width / cutnum);
+        let height = parseInt(texture.height);
+        let frameArray = [];
+        for (let i = 0; i < cutnum; i++) {
+            let rectangle = new PIXI.Rectangle(i * width, 0, width, height);
+            let frame = new PIXI.Texture(texture, rectangle);
+            frameArray.push(frame);
+        }
+
+        //飞机子弹击中boss动画
+        sprite = new PIXI.extras.AnimatedSprite(frameArray);
+        sprite.anchor.x = 0.5;
+        sprite.position.x = x;
+        sprite.position.y = y;
+        sprite.animationSpeed = 0.15;
+        sprite.loop = false;
+        sprite.onComplete = () => {
+            sprite.visible = false;
+            // bulletBombAnimation.stop();
+        }
+        sprite.visible = false;
+        app.stage.addChild(sprite);
     }
 
     function onInitAudio() {
@@ -212,7 +238,7 @@
                 updateBullet();
                 const randPos = getPlanePos(frameIndex);
                 move(frameIndex, randPos.x, randPos.y);
-                // hit();
+                hit();
                 const bulletList = createBullets(frameIndex);
                 bulletList.forEach(item => {
                     emission(frameIndex, item.dx, item.dy);
@@ -283,14 +309,24 @@
 
     //碰撞检测 
     function hit() {
-        bump.hit(plane, bullets, true, true, true, (collision, platform) => {
-            if (platform) {
-                gradeNum++;
-                const index = bullets.findIndex(a => a === platform);
-                removeBossBullet(platform, index);
-                gradeText.text = "碰撞：" + gradeNum;
+        // bump.hit(plane, bullets, true, true, true, (collision, platform) => {
+        //     if (platform) {
+        //         gradeNum++;
+        //         const index = bullets.findIndex(a => a === platform);
+        //         removeBossBullet(platform, index);
+        //         gradeText.text = "碰撞：" + gradeNum;
+        //     }
+        // });
+
+        for (let i = planeBullet_animals.children.length - 1; i >= 0; i--) {
+            const item = planeBullet_animals.children[i];
+            if (item.y <= 80) {
+                removePlaneBullet(item);
+                bulletBombAnimation.visible = true;
+                bulletBombAnimation.gotoAndPlay(0);
             }
-        });
+
+        }
     }
 
     //第r帧 飞机移动位置
