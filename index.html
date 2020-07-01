@@ -7,7 +7,6 @@
     <title>PIXI</title>
     <script src="./script/pixi.5.2.4.js"></script>
     <script src="https://www.kkkk1000.com/js/bump.js"></script>
-    <script src="./script/audioPlay.js"></script>
 </head>
 
 
@@ -48,6 +47,12 @@
     //飞机子弹layout
     let planeBullet_animals = new PIXI.Container();
 
+    //动画效果layout
+    let animation_animals = new PIXI.Container();
+
+    //音效
+    let musices = [];
+
     //飞机
     let plane;
 
@@ -57,20 +62,30 @@
     //螺旋桨
     let propeller;
 
-    //飞机子弹击中boss效果动画
-    let bulletBombAnimation;
+    let gameData = [];
 
-    //清屏效果动画
-    let cleraCanvasAnimation;
 
     function random(min, max) {
         return Math.floor(Math.random() * (max - min) + min);
     }
 
     window.onload = () => {
-        onInit();
+        var url = "1.json"/*json文件url，本地的就写本地的位置，如果是服务器的就写服务器的路径*/
+        var request = new XMLHttpRequest();
+        request.open("get", url);/*设置请求方法与路径*/
+        request.send(null);/*不发送数据到服务器*/
+        request.onload = function () {/*XHR对象获取到返回信息后执行*/
+            if (request.status == 200) {/*返回状态为200，即为数据获取成功*/
+                const json = JSON.parse(request.responseText);
+                gameData = json.gameData;
+                onInit();
+                console.log(json);
+            }
+        }
+        // onInit();
     }
 
+    //场景初始化
     function onInit() {
         window.app = new PIXI.Application({
             view: document.getElementById('gameCanvas'),
@@ -97,7 +112,7 @@
         onInitAudio();
     }
 
-
+    //初始化精灵
     function onInitSprite() {
         let bgSprite = new Sprite(
             TextureCache["image/背景/背景1.png"]
@@ -142,6 +157,7 @@
 
         app.stage.addChild(bossBullet_animals);
         app.stage.addChild(planeBullet_animals);
+        app.stage.addChild(animation_animals);
 
         const scorecard = new Sprite(
             TextureCache["image/背景/记分板.png"]
@@ -164,39 +180,19 @@
         // gradeText.position.set(420, 60);
     }
 
+    //初始化动画特效
     function onInitAnimation() {
-        let texture = PIXI.Texture.fromImage("image/序列/击中.png");
-        let cutnum = 4;
-        //将图片拆分为4帧
-        let width = parseInt(texture.width / cutnum);
-        let height = parseInt(texture.height);
-        let frameArray = [];
-        for (let i = 0; i < cutnum; i++) {
-            let rectangle = new PIXI.Rectangle(i * width, 0, width, height);
-            let frame = new PIXI.Texture(texture, rectangle);
-            frameArray.push(frame);
-        }
-
-        //飞机子弹击中boss动画
-        bulletBombAnimation = new PIXI.extras.AnimatedSprite(frameArray);
-        bulletBombAnimation.anchor.x = 0.5;
-        bulletBombAnimation.position.x = 320;
-        bulletBombAnimation.position.y = 20;
-        bulletBombAnimation.animationSpeed = 0.15;
-        bulletBombAnimation.loop = false;
-        bulletBombAnimation.onComplete = () => {
-            bulletBombAnimation.visible = false;
-            // bulletBombAnimation.stop();
-        }
-        bulletBombAnimation.visible = false;
-        app.stage.addChild(bulletBombAnimation);
-        //this.onCreateAnimatedSprite()
-
+        const imagePath1 = "image/序列/击中.png";
+        this.onCreateAnimatedSprite(imagePath1, 4, 320, 80);
+        const imagePath2 = "image/序列/爆炸.png";
+        this.onCreateAnimatedSprite(imagePath2, 4, 320, 80, 0.3);
+        // const imagePath3 = "image/序列/清场.png";
+        // this.onCreateAnimatedSprite(imagePath3, 23, 320, 80, 1);
     }
 
-    function onCreateAnimatedSprite(imagePath, cutnum, sprite, x, y) {
+    function onCreateAnimatedSprite(imagePath, cutnum, x, y, s = 1) {
         let texture = PIXI.Texture.fromImage(imagePath);
-        //将图片拆分为4帧
+        //将图片拆分为cutnum 帧
         let width = parseInt(texture.width / cutnum);
         let height = parseInt(texture.height);
         let frameArray = [];
@@ -205,46 +201,59 @@
             let frame = new PIXI.Texture(texture, rectangle);
             frameArray.push(frame);
         }
-
         //飞机子弹击中boss动画
-        sprite = new PIXI.extras.AnimatedSprite(frameArray);
+        const sprite = new PIXI.extras.AnimatedSprite(frameArray);
         sprite.anchor.x = 0.5;
+        sprite.anchor.y = 0.5;
         sprite.position.x = x;
         sprite.position.y = y;
         sprite.animationSpeed = 0.15;
+        sprite.scale.set(s, s);
         sprite.loop = false;
         sprite.onComplete = () => {
             sprite.visible = false;
-            // bulletBombAnimation.stop();
         }
         sprite.visible = false;
-        app.stage.addChild(sprite);
+        animation_animals.addChild(sprite);
     }
 
+    //初始化音效
     function onInitAudio() {
-        let bgAudio = createAudio("music/bg.mp3");
+        let bgAudio = createAudio("music/bg.mp3", 0.5);
         bgAudio.loop = true;
         bgAudio.play();
+
+        let audio1 = createAudio("music/击中.mp3");
+        musices.push(audio1);
+        let audio2 = createAudio("music/爆炸.mp3");
+        musices.push(audio2);
+    }
+
+    function createAudio(url, volume = 1) {
+        let audio = document.createElement("audio");
+        audio.src = url;
+        audio.controls = false;
+        audio.volume = volume;
+        audio.setAttribute("url", url);
+        return audio;
     }
 
     //开始游戏
     function play() {
         const cc1 = 6;
         const cc2 = 60;
+        let i = 0;
         app.ticker.add(de => {
-            frameIndex++;
+            i++;
+            if (frameIndex >= gameData.length - 1) return;
             rotationPropeller();
-            if (frameIndex % cc1 == 0) {
-                updateBullet();
-                const randPos = getPlanePos(frameIndex);
-                move(frameIndex, randPos.x, randPos.y);
+            if (i % cc1 == 0) {
+                frameIndex++;
+                updateBullet(frameIndex);
+                move(frameIndex);
                 hit();
-                const bulletList = createBullets(frameIndex);
-                bulletList.forEach(item => {
-                    emission(frameIndex, item.dx, item.dy);
-                });
             }
-            if (frameIndex % cc2 == 0) {
+            if (i % cc2 == 0) {
                 planeSendBullet();
             }
         })
@@ -278,16 +287,18 @@
     }
 
     //Plane 可以访问 第r回合  移动飞机到 x y
-    function move(r, x, y) {
-        if (plane) {
-            plane.x = x;
-            plane.y = y;
+    function move(r) {
+        const data = gameData[r].plane[0];
+        if (!data || !plane) return;
+        plane.x = data.x;
+        plane.y = window.config.height - data.y;
+        if (r % 180 == 0) {
+            playAnimation(1, plane.x, plane.y);
         }
     }
 
-    //Boss 可以访问 在第r回合发射一枚子弹，方向为(dx,dy), 速度固定为5px / 帧
-    function emission(r, dx, dy) {
-        mission_Number++;
+    //创建子弹
+    function createBulle(r) {
         let id = random(1, 5);
         let bullet = new Sprite(
             TextureCache[`image/bullet/${id}.png`]
@@ -295,14 +306,9 @@
         bullet.r = r;
         bullet.anchor.x = 0.5;
         bullet.anchor.y = 0.5;
-        bullet.width = 15;
-        bullet.height = 15;
-        bullet.x = window.config.canvasWidth / 2;
-        bullet.y = 100;
-        const l = Math.sqrt(Math.pow(dx - bullet.x, 2) + Math.pow(dy - bullet.y, 2));
-        const off_s = l / bullet_speed;
-        bullet.vx = (bullet.x - dx) / off_s;
-        bullet.vy = (bullet.y - dy) / off_s;
+        bullet.width = 20;
+        bullet.height = 20;
+        bullet.visible = false;
         bossBullet_animals.addChild(bullet);
         bullets.push(bullet);
     }
@@ -322,54 +328,47 @@
             const item = planeBullet_animals.children[i];
             if (item.y <= 80) {
                 removePlaneBullet(item);
-                bulletBombAnimation.visible = true;
-                bulletBombAnimation.gotoAndPlay(0);
+                playAnimation(0);
             }
 
         }
     }
 
-    //第r帧 飞机移动位置
-    function getPlanePos(r) {
-        let x = random(plane.x - 30, plane.x + 30);
-        let y = random(plane.y - 30, plane.y + 30);
-        if (x < plane.width / 2) {
-            x = plane.width / 2;
-        } else if (x > window.config.canvasWidth - plane.width / 2) {
-            x = window.config.canvasWidth - plane.width / 2;
+    //播放动画效果 
+    //index 0：击中  1：飞机爆炸
+    function playAnimation(index, x, y) {
+        if (index < animation_animals.children.length) {
+            const sprite = animation_animals.children[index];
+            if (x && y) {
+                sprite.x = x;
+                sprite.y = y;
+            }
+            sprite.visible = true;
+            musices[index].play();
+            sprite.gotoAndPlay(0);
         }
-
-        if (y < plane.height / 2) {
-            y = plane.height / 2;
-        } else if (y > window.config.height - plane.height / 2) {
-            y = window.config.height - plane.height / 2;
-        } else if (y < (window.config.height - plane.height) / 2) {
-            y = (window.config.height - plane.height) / 2;
-        }
-        return { "x": x, "y": y }
     }
-
-    //第r帧 boss创建子弹
-    function createBullets(r) {
-        const list = [];
-        const n = 1;
-        for (let i = 0; i < n; i++) {
-            list.push({ "dx": random(plane.x - 50, plane.x + 50), "dy": random(plane.y - 50, plane.y + 50) })
-        }
-        return list;
-    }
-
 
     //刷新子弹
-    function updateBullet() {
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            const bullet = bullets[i];
-            bullet.x -= bullet.vx;
-            bullet.y -= bullet.vy;
-            if (bullet.x < 0 || bullet.x > window.config.canvasWidth || bullet.y < 0 || bullet.y > window.config.height) {
-                removeBossBullet(bullet, i);
+    function updateBullet(r) {
+        const length = gameData[r].bullet.length;
+        if (bullets.length < length) {
+            for (let i = 0; i < length - bullets.length; i++) {
+                createBulle(r);
             }
         }
+        for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            const data = gameData[r].bullet[i];
+            if (i < length && data) {
+                bullet.visible = true;
+                bullet.x = data.x;
+                bullet.y = window.config.height - data.y;
+            } else {
+                bullet.visible = false;
+            }
+        }
+
         for (let i = planeBullet_animals.children.length - 1; i >= 0; i--) {
             const bullet = planeBullet_animals.children[i];
             bullet.x -= bullet.vx;
@@ -385,6 +384,7 @@
             bullets.splice(i, 1);
         }
     }
+
     //删除飞机子弹
     function removePlaneBullet(bullet) {
         if (bullet) {
