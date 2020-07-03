@@ -32,6 +32,7 @@
 
     //当前帧数
     let frameIndex = 0;
+
     //当前碰撞数
     let gradeNum = 0;
 
@@ -43,6 +44,9 @@
 
     //动画效果layout
     let animation_animals = new PIXI.Container();
+
+    //背景音乐
+    let bgAudio;
 
     //音效
     let musices = [];
@@ -56,28 +60,31 @@
     //螺旋桨
     let propeller;
 
-    //游戏数据
-    let gameData = [];
+    //游戏总数据
+    let mainData = {};
 
+    //游戏logs数据
+    let logsData = [];
+
+    //飞机用户
+    let userPlaneText;
+
+    //boss用户
+    let userBossText;
+
+    //显示剩余时间
+    let timeText;
+
+    let isGameOver = false;
 
     function random(min, max) {
         return Math.floor(Math.random() * (max - min) + min);
     }
 
     window.onload = () => {
-        var url = "https://ppt-hetao.cdn.pipacoding.com/logs/33_1593692919"/*json文件url，本地的就写本地的位置，如果是服务器的就写服务器的路径*/
-        var request = new XMLHttpRequest();
-        request.open("get", url);/*设置请求方法与路径*/
-        request.send(null);/*不发送数据到服务器*/
-        request.onload = function () {/*XHR对象获取到返回信息后执行*/
-            if (request.status == 200) {/*返回状态为200，即为数据获取成功*/
-                const json = JSON.parse(request.responseText);
-                gameData = json.logs;
-                onInit();
-                console.log(json);
-            }
-        }
-        // onInit();
+        onInit();
+        // const url = "https://ppt-hetao.cdn.pipacoding.com/logs/4_1593701029";
+        // onLoadUrl(url);
     }
 
     //场景初始化
@@ -98,10 +105,24 @@
             // console.log("progress: " + loader.progress + "%");
         }).load(() => {
             onInitSprite();
-            play();
+            onInitAudio();
+            const url = "https://ppt-hetao.cdn.pipacoding.com/logs/4_1593701029";
+            onLoadUrl(url);
         });
+    }
 
-        onInitAudio();
+    //解析数据
+    function onLoadUrl(url) {
+        var request = new XMLHttpRequest();
+        request.open("get", url);
+        request.send(null);
+        request.onload = function () {
+            if (request.status == 200) {
+                const json = JSON.parse(request.responseText);
+                onInitData(json);
+                console.log(mainData);
+            }
+        }
     }
 
     //初始化精灵
@@ -159,17 +180,36 @@
         scorecard.x = window.config.canvasWidth;
         app.stage.addChild(scorecard);
 
+        const createText = () => {
+            const text = new Text();
+            text.anchor.x = 0.5;
+            text.anchor.y = 0.5;
+            text.style = { fill: "white", fontSize: 22 };
+            app.stage.addChild(text);
+            return text;
+        }
+        timeText = createText();
+        timeText.position.set(window.config.canvasWidth + (window.config.width - window.config.canvasWidth) / 2, 110);
+
+        userPlaneText = createText();
+        userPlaneText.position.set(window.config.canvasWidth + (window.config.width - window.config.canvasWidth) / 2, 238);
+
+        userBossText = createText();
+        userBossText.position.set(window.config.canvasWidth + (window.config.width - window.config.canvasWidth) / 2, 374);
+
         this.onInitAnimation();
+    }
 
-        // window.curFrameText = new Text("帧数：0");
-        // curFrameText.style = { fill: "white", font: "10px" };
-        // app.stage.addChild(curFrameText);
-        // curFrameText.position.set(420, 20);
-
-        // window.gradeText = new Text("碰撞：0");
-        // gradeText.style = { fill: "yellow", font: "10px" };
-        // app.stage.addChild(gradeText);
-        // gradeText.position.set(420, 60);
+    //获取到数据  初始化和数据相关的显示
+    function onInitData(data) {
+        mainData = data;
+        logsData = mainData.logs;
+        if (mainData.users.length > 1) {
+            userPlaneText.text = mainData.users[0].name;
+            userBossText.text = mainData.users[1].name;
+        }
+        timeText.text = getTimeText(-1);
+        play();
     }
 
     //初始化动画特效
@@ -178,8 +218,9 @@
         this.onCreateAnimatedSprite(imagePath1, 4, 320, 80);
         const imagePath2 = "image/序列/爆炸.png";
         this.onCreateAnimatedSprite(imagePath2, 4, 320, 80, 0.3);
-        // const imagePath3 = "image/序列/清场.png";
-        // this.onCreateAnimatedSprite(imagePath3, 23, 320, 80, 1);
+        const imagePath3 = "image/序列/清场.png";
+        const sprite = this.onCreateAnimatedSprite(imagePath3, 23, 320, window.height, 1);
+        sprite.anchor.y = 1;
     }
 
     function onCreateAnimatedSprite(imagePath, cutnum, x, y, s = 1) {
@@ -207,18 +248,19 @@
         }
         sprite.visible = false;
         animation_animals.addChild(sprite);
+        return sprite;
     }
 
     //初始化音效
     function onInitAudio() {
-        let bgAudio = createAudio("music/bg.mp3", 0.5);
+        bgAudio = createAudio("music/bg.mp3", 0.5);
         bgAudio.loop = true;
-        bgAudio.play();
-
         let audio1 = createAudio("music/击中.mp3");
         musices.push(audio1);
         let audio2 = createAudio("music/爆炸.mp3");
         musices.push(audio2);
+        let audio3 = createAudio("music/清场.mp3");
+        musices.push(audio3);
     }
 
     function createAudio(url, volume = 1) {
@@ -232,23 +274,46 @@
 
     //开始游戏
     function play() {
+        isGameOver = false;
+        plane.visible = true;
+        bgAudio.play();
         const cc1 = 6;
         const cc2 = 60;
         let i = 0;
         app.ticker.add(de => {
             i++;
-            if (frameIndex >= gameData.length - 1) return;
+            if (isGameOver) return;
             rotationPropeller();
             if (i % cc1 == 0) {
                 frameIndex++;
-                updateBullet(frameIndex);
-                move(frameIndex);
-                hit();
+                playFrame(frameIndex);
+                //hit();
             }
-            if (i % cc2 == 0) {
-                planeSendBullet();
-            }
+            // if (i % cc2 == 0) {
+            //     planeSendBullet();
+            // }
         })
+    }
+
+    //播放到第几帧
+    function playFrame(index) {
+        if (!logsData) {
+            console.log("error：没有游戏数据");
+            return;
+        }
+        updateBullet(index);
+        move(index);
+        timeText.text = getTimeText(index);
+    }
+
+    //根据当前帧数显示剩余时间
+    function getTimeText(index) {
+        const ms_sum = (logsData.length - index - 1) * 100;
+        let s = Math.floor(ms_sum / 1000);
+        let ms = ms_sum - s * 1000;
+        s = s >= 10 ? s : "0" + s;
+        ms = ms > 0 ? ms : "000";
+        return s + ":" + ms;
     }
 
     //飞机发射子弹
@@ -280,12 +345,35 @@
 
     //Plane 可以访问 第r回合  移动飞机到 x y
     function move(r) {
-        const data = gameData[r].plane[0];
-        if (!data || !plane) return;
-        plane.x = data.x;
-        plane.y = window.config.height - data.y;
-        if (r % 180 == 0) {
+        const datas = logsData[r].plane;
+        if (!datas || datas.length == 0 || !plane) return;
+        for (let i = 0; i < datas.length; i++) {
+            const data = datas[i];
+            if (data.type == "move") {
+                plane.x = data.x;
+                plane.y = window.config.height - data.y;
+            } else if (data.type == "clear") {
+                playAnimation(2, plane.x, plane.y);
+            } else if (data.type == "gameover") {
+                plane.visible = false;
+                playAnimation(1, plane.x, plane.y);
+                onGameOver();
+            }
+        }
+
+        if (r == logsData.length - 1) {
+            plane.visible = false;
             playAnimation(1, plane.x, plane.y);
+            onGameOver();
+        }
+    }
+
+    //游戏结束
+    function onGameOver() {
+        isGameOver = true;
+        for (let i = bossBullet_animals.children.length - 1; i >= 0; i--) {
+            const bullet = bossBullet_animals.children[i];
+            bullet.visible = false;
         }
     }
 
@@ -322,7 +410,7 @@
     }
 
     //播放动画效果 
-    //index 0：击中  1：飞机爆炸
+    //index 0：击中  1：飞机爆炸  2.清场
     function playAnimation(index, x, y) {
         if (index < animation_animals.children.length) {
             const sprite = animation_animals.children[index];
@@ -338,8 +426,8 @@
 
     //刷新子弹
     function updateBullet(r) {
-        if (!gameData[r].bullet) return;
-        const length = gameData[r].bullet.length;
+        if (!logsData[r].bullet) return;
+        const length = logsData[r].bullet.length;
         if (bossBullet_animals.children.length < length) {
             for (let i = 0; i < length - bossBullet_animals.children.length; i++) {
                 createBulle(r);
@@ -347,7 +435,7 @@
         }
         for (let i = bossBullet_animals.children.length - 1; i >= 0; i--) {
             const bullet = bossBullet_animals.children[i];
-            const data = gameData[r].bullet[i];
+            const data = logsData[r].bullet[i];
             if (i < length && data) {
                 if (data.type == 15 || data.type == 20 || data.type == 25) {
                     bullet.texture = TextureCache[`image/bullet/${data.type}.png`];
