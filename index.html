@@ -17,7 +17,7 @@
     window.config = {
         width: 890,
         height: 480,
-        canvasWidth: 641
+        canvasWidth: 640
     }
     const Sprite = PIXI.Sprite;
     const resources = PIXI.loader.resources;
@@ -27,19 +27,13 @@
 
     //碰撞检测
     let bump = new Bump(PIXI);
-    //子弹集合
-    const bullets = [];
     //最大帧数
     const frameSum = 3000;
-    //当前场上的子弹数量
-    let mission_Number = 0;
+
     //当前帧数
     let frameIndex = 0;
     //当前碰撞数
     let gradeNum = 0;
-
-    //子弹速率 5/帧
-    const bullet_speed = 5;
 
     //boss子弹layout
     let bossBullet_animals = new PIXI.Container();
@@ -62,6 +56,7 @@
     //螺旋桨
     let propeller;
 
+    //游戏数据
     let gameData = [];
 
 
@@ -70,14 +65,14 @@
     }
 
     window.onload = () => {
-        var url = "1.json"/*json文件url，本地的就写本地的位置，如果是服务器的就写服务器的路径*/
+        var url = "https://ppt-hetao.cdn.pipacoding.com/logs/33_1593692919"/*json文件url，本地的就写本地的位置，如果是服务器的就写服务器的路径*/
         var request = new XMLHttpRequest();
         request.open("get", url);/*设置请求方法与路径*/
         request.send(null);/*不发送数据到服务器*/
         request.onload = function () {/*XHR对象获取到返回信息后执行*/
             if (request.status == 200) {/*返回状态为200，即为数据获取成功*/
                 const json = JSON.parse(request.responseText);
-                gameData = json.gameData;
+                gameData = json.logs;
                 onInit();
                 console.log(json);
             }
@@ -97,10 +92,7 @@
         })
         app.renderer.backgroundColor = 0x061639;
         const images = ["image/背景/背景1.png", "image/背景/记分板.png", "image/飞机/飞机.png", "image/boss/boss1.png", "image/boss/boss2.png"
-            , "image/bullet/子弹.png", "image/序列/爆炸.png", "image/序列/击中.png", "image/序列/清场.png"];
-        for (let i = 1; i <= 4; i++) {
-            images.push(`image/bullet/${i}.png`)
-        }
+            , "image/bullet/子弹.png", "image/bullet/15.png", "image/bullet/25.png", "image/bullet/20.png", "image/序列/爆炸.png", "image/序列/击中.png", "image/序列/清场.png"];
         PIXI.loader.add(images).on("progress", (loader, resource) => {
             // console.log("loading: " + resource.url);
             // console.log("progress: " + loader.progress + "%");
@@ -299,10 +291,7 @@
 
     //创建子弹
     function createBulle(r) {
-        let id = random(1, 5);
-        let bullet = new Sprite(
-            TextureCache[`image/bullet/${id}.png`]
-        );
+        const bullet = new Sprite();
         bullet.r = r;
         bullet.anchor.x = 0.5;
         bullet.anchor.y = 0.5;
@@ -310,7 +299,6 @@
         bullet.height = 20;
         bullet.visible = false;
         bossBullet_animals.addChild(bullet);
-        bullets.push(bullet);
     }
 
     //碰撞检测 
@@ -323,7 +311,6 @@
         //         gradeText.text = "碰撞：" + gradeNum;
         //     }
         // });
-
         for (let i = planeBullet_animals.children.length - 1; i >= 0; i--) {
             const item = planeBullet_animals.children[i];
             if (item.y <= 80) {
@@ -351,16 +338,22 @@
 
     //刷新子弹
     function updateBullet(r) {
+        if (!gameData[r].bullet) return;
         const length = gameData[r].bullet.length;
-        if (bullets.length < length) {
-            for (let i = 0; i < length - bullets.length; i++) {
+        if (bossBullet_animals.children.length < length) {
+            for (let i = 0; i < length - bossBullet_animals.children.length; i++) {
                 createBulle(r);
             }
         }
-        for (let i = bullets.length - 1; i >= 0; i--) {
-            const bullet = bullets[i];
+        for (let i = bossBullet_animals.children.length - 1; i >= 0; i--) {
+            const bullet = bossBullet_animals.children[i];
             const data = gameData[r].bullet[i];
             if (i < length && data) {
+                if (data.type == 15 || data.type == 20 || data.type == 25) {
+                    bullet.texture = TextureCache[`image/bullet/${data.type}.png`];
+                } else {
+                    bullet.texture = TextureCache[`image/bullet/15.png`];
+                }
                 bullet.visible = true;
                 bullet.x = data.x;
                 bullet.y = window.config.height - data.y;
@@ -379,9 +372,7 @@
     //删除boss子弹
     function removeBossBullet(bullet, i) {
         if (bullet && i >= 0) {
-            mission_Number--;
             bossBullet_animals.removeChild(bullet);
-            bullets.splice(i, 1);
         }
     }
 
